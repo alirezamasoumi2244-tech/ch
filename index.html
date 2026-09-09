@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>شوتر لوکال - نسخه‌ی چیت‌دار (Aimbot)</title>
+    <style>
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #030712; overflow: hidden;
+            font-family: Tahoma, sans-serif; color: #fff;
+        }
+        #game-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: none; }
+        .crosshair {
+            position: absolute; top: 50%; left: 50%; width: 14px; height: 14px;
+            transform: translate(-50%, -50%); border: 2px solid rgba(239, 68, 68, 0.9); border-radius: 50%;
+            transition: border-color 0.1s;
+        }
+        .crosshair.hit { border-color: #f59e0b !important; transform: translate(-50%, -50%) scale(1.4); }
+        .crosshair::before { content: ''; position: absolute; top: 5px; left: -4px; width: 18px; height: 2px; background: inherit; }
+        .crosshair::after { content: ''; position: absolute; top: -4px; left: 5px; width: 2px; height: 18px; background: inherit; }
+
+        #hud {
+            position: absolute; bottom: 20px; left: 20px; right: 20px;
+            display: flex; justify-content: space-between; align-items: flex-end;
+        }
+        .hud-card {
+            background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15); padding: 10px 20px; border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5); pointer-events: auto;
+        }
+        .hud-title { font-size: 11px; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; }
+        .hud-value { font-size: 22px; font-weight: bold; color: #ef4444; }
+
+        #mobile-controls { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 12; display: none; }
+        .touch-zone { pointer-events: auto; position: absolute; }
+        #joystick-zone { bottom: 30px; left: 30px; width: 130px; height: 130px; background: rgba(255,255,255,0.08); border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); }
+        #joystick-knob { width: 50px; height: 50px; background: rgba(239, 68, 68, 0.7); border-radius: 50%; position: absolute; top: 40px; left: 40px; pointer-events: none; }
+        #fire-btn { bottom: 40px; right: 40px; width: 85px; height: 85px; background: radial-gradient(circle, #ef4444, #991b1b); border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; }
+
+        .menu-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(3, 7, 18, 0.95); z-index: 30;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .menu-box {
+            background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(239,68,68,0.3);
+            padding: 30px; border-radius: 20px; text-align: center; max-width: 400px; width: 90%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.7);
+        }
+        h1 { margin-top: 0; color: #ef4444; font-size: 22px; }
+        input[type="text"] { width: 100%; padding: 12px; background: #0f172a; color: #fff; border: 1px solid #334155; border-radius: 10px; font-size: 16px; text-align: center; margin: 10px 0; outline: none; }
+        .btn {
+            background: linear-gradient(135deg, #dc2626, #b91c1c); color: white; border: none;
+            padding: 12px; width: 100%; font-size: 15px; font-weight: bold; border-radius: 10px;
+            cursor: pointer; margin-top: 8px; transition: 0.2s;
+        }
+        .btn-blue { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+        .room-code-display { font-size: 24px; color: #f59e0b; background: #0f172a; padding: 12px; border-radius: 8px; margin: 10px 0; letter-spacing: 4px; font-weight: bold; }
+        .status-text { font-size: 13px; color: #38bdf8; margin-top: 10px; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+</head>
+<body>
+
+<div id="game-container"></div>
+
+<div id="ui-layer">
+    <div class="crosshair" id="crosshair"></div>
+    <div id="hud">
+        <div class="hud-card">
+            <div class="hud-title">سلامتی</div>
+            <div class="hud-value" id="hp-val">100</div>
+        </div>
+        <div class="hud-card" style="text-align: center;">
+            <div class="hud-title">امتیاز (کیل)</div>
+            <div class="hud-value" id="score-val" style="color: #f59e0b;">0</div>
+        </div>
+        <div class="hud-card" style="text-align: right;">
+            <div class="hud-title">وضعیت چیت</div>
+            <div class="hud-value" id="net-status" style="font-size: 14px; color: #ef4444;">ایم‌بات فعال 🔥</div>
+        </div>
+    </div>
+</div>
+
+<div id="mobile-controls">
+    <div id="joystick-zone" class="touch-zone"><div id="joystick-knob"></div></div>
+    <div id="fire-btn" class="touch-zone">شلیک چیت</div>
+</div>
+
+<div id="main-menu" class="menu-overlay">
+    <div class="menu-box">
+        <h1>نسخه‌ی چیت‌دار (Aimbot)</h1>
+        <p style="color: #94a3b8; font-size: 12px; margin-bottom: 20px;">سرعت ۱۱.۵ + قفل خودکار روی حریف</p>
+        
+        <button class="btn btn-blue" onclick="createRoom()">ساخت روم (میزبان)</button>
+        
+        <div style="margin: 20px 0; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+            <input type="text" id="join-code-input" placeholder="کد ۴ رقمی روم را وارد کنید...">
+            <button class="btn" onclick="joinRoom()">پیوستن به روم</button>
+        </div>
+        <div id="menu-status" class="status-text"></div>
+    </div>
+</div>
+
+<div id="host-wait-menu" class="menu-overlay" style="display: none;">
+    <div class="menu-box">
+        <h1>لابی میزبان (چیت)</h1>
+        <p style="color: #94a3b8; font-size: 13px;">کد ۴ رقمی روم را به دوستتان بدهید:</p>
+        <div class="room-code-display" id="my-room-code">---</div>
+        <div id="host-status" class="status-text" style="color: #f59e0b;">بازیکنان متصل: ۱ / ۱۰</div>
+        <button class="btn btn-blue" id="start-game-btn" onclick="hostStartGame()" style="margin-top: 15px; display:none;">شروع بازی</button>
+    </div>
+</div>
+
+<div id="client-wait-menu" class="menu-overlay" style="display: none;">
+    <div class="menu-box">
+        <h1>متصل شدید!</h1>
+        <p style="color: #94a3b8; font-size: 13px;">کد روم: <span id="connected-room-code" style="color:#f59e0b">---</span></p>
+        <div class="status-text" style="color: #f59e0b; margin-top: 20px;">منتظر شروع بازی توسط میزبان...</div>
+    </div>
+</div>
+
+<div id="game-over" class="menu-overlay" style="display: none;">
+    <div class="menu-box">
+        <h1 style="color: #ef4444;">مردید!</h1>
+        <button class="btn" onclick="location.reload()">تلاش مجدد</button>
+    </div>
+</div>
+
+<script>
+let peer = null, isHost = false;
+let myId = '';
+let connections = {};
+let scene, camera, renderer;
+let yawObject, pitchObject;
+let isRunning = false;
+let playerHealth = 100, playerScore = 0;
+let walls = [];
+let remotePlayers = {};
+
+const playerBox = new THREE.Box3();
+const playerSize = new THREE.Vector3(0.8, 1.8, 0.8);
+let isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+const SPAWN_POINTS = [
+    {x: -380, z: -380}, {x: 380, z: -380},
+    {x: -380, z: 380},  {x: 380, z: 380},
+    {x: -380, z: 0},    {x: 380, z: 0},
+    {x: 0, z: -380},    {x: 0, z: 380},
+    {x: -200, z: -200}, {x: 200, z: 200}
+];
+
+let audioCtx = null;
+function playSound(type) {
+    try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+        if (type === 'shoot') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.exponentialRampToValueAtTime(40, now + 0.08);
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+        } else if (type === 'hit') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(500, now);
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.linearRampToValueAtTime(0.01, now + 0.06);
+        }
+        osc.start(now); osc.stop(now + 0.08);
+    } catch(e){}
+}
+
+function initEngine() {
+    const container = document.getElementById('game-container');
+    container.innerHTML = '';
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x050b14);
+
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+    renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    container.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0x1e293b, 0.9));
+
+    const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(1000, 1000),
+        new THREE.MeshBasicMaterial({ color: 0x0f172a })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
+
+    const visualWalls = new THREE.Group();
+    scene.add(visualWalls);
+    
+    const MAP_BLOCKS = [
+        [0, 15, -450, 900, 30, 10], [0, 15, 450, 900, 30, 10],
+        [-450, 15, 0, 10, 30, 900], [450, 15, 0, 10, 30, 900],
+        [-150, 10, -150, 40, 20, 100], [150, 10, 150, 40, 20, 100],
+        [-200, 10, 200, 80, 20, 40], [200, 10, -200, 80, 20, 40]
+    ];
+    const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+    const wallMat = new THREE.MeshBasicMaterial({ color: 0x334155 });
+
+    MAP_BLOCKS.forEach(b => {
+        const mesh = new THREE.Mesh(boxGeo, wallMat);
+        mesh.position.set(b[0], b[1], b[2]);
+        mesh.scale.set(b[3], b[4], b[5]);
+        visualWalls.add(mesh);
+        walls.push(new THREE.Box3().setFromCenterAndSize(mesh.position, mesh.scale));
+    });
+
+    yawObject = new THREE.Object3D();
+    pitchObject = new THREE.Object3D();
+    scene.add(yawObject);
+    yawObject.add(pitchObject);
+    pitchObject.add(camera);
+}
+
+function createRoom() {
+    isHost = true;
+    document.getElementById('menu-status').innerText = 'در حال ساخت روم...';
+    
+    const shortCode = Math.floor(1000 + Math.random() * 9000).toString();
+    peer = new Peer(shortCode);
+    
+    peer.on('open', id => {
+        myId = id;
+        document.getElementById('main-menu').style.display = 'none';
+        document.getElementById('host-wait-menu').style.display = 'flex';
+        document.getElementById('my-room-code').innerText = id;
+    });
+
+    peer.on('error', err => {
+        if (err.type === 'unavailable-id') {
+            createRoom();
+        } else {
+            document.getElementById('menu-status').innerText = 'خطا در اتصال به سرور';
+        }
+    });
+
+    peer.on('connection', conn => {
+        if (Object.keys(connections).length >= 9) {
+            conn.on('open', () => { conn.send({type: 'reject'}); conn.close(); });
+            return;
+        }
+        connections[conn.peer] = conn;
+        setupConnEvents(conn);
+        
+        const count = Object.keys(connections).length + 1;
+        document.getElementById('host-status').innerText = `بازیکنان متصل: ${count} / ۱۰`;
+        document.getElementById('start-game-btn').style.display = 'block';
+    });
+}
+
+function joinRoom() {
+    isHost = false;
+    let code = document.getElementById('join-code-input').value.trim();
+    if (!code) { alert('لطفاً کد ۴ رقمی روم را وارد کنید!'); return; }
+
+    document.getElementById('menu-status').innerText = 'در حال اتصال به میزبان...';
+
+    peer = new Peer();
+    
+    peer.on('open', id => {
+        myId = id;
+        let conn = peer.connect(code);
+        connections[code] = conn;
+        setupConnEvents(conn);
+        
+        conn.on('open', () => {
+            document.getElementById('main-menu').style.display = 'none';
+            document.getElementById('client-wait-menu').style.display = 'flex';
+            document.getElementById('connected-room-code').innerText = code;
+        });
+    });
+
+    peer.on('error', err => {
+        document.getElementById('menu-status').innerText = 'کد نامعتبر یا خطا در اتصال!';
+    });
+}
+
+function hostStartGame() {
+    Object.values(connections).forEach(conn => {
+        if (conn && conn.open) conn.send({ type: 'start' });
+    });
+    startGame();
+}
+
+function setupConnEvents(conn) {
+    conn.on('data', data => {
+        if (data.type === 'start') {
+            startGame();
+        } else if (data.type === 'pos') {
+            updateRemotePlayer(data.id, data.pos, data.rot);
+        } else if (data.type === 'shoot') {
+            createTracer(data.start, data.end, 0xef4444);
+        } else if (data.type === 'hit') {
+            if (data.targetId === myId) {
+                playerHealth -= data.dmg;
+                document.getElementById('hp-val').innerText = Math.max(0, playerHealth);
+                playSound('hit');
+                if (playerHealth <= 0) {
+                    gameOver();
+                    broadcastDeath();
+                }
+            }
+        } else if (data.type === 'death') {
+            if (remotePlayers[data.id]) {
+                remotePlayers[data.id].group.visible = false;
+            }
+        }
+    });
+}
+
+function broadcastDeath() {
+    Object.values(connections).forEach(conn => {
+        if (conn && conn.open) conn.send({ type: 'death', id: myId });
+    });
+}
+
+function startGame() {
+    if (isRunning) return;
+    
+    document.getElementById('main-menu').style.display = 'none';
+    document.getElementById('host-wait-menu').style.display = 'none';
+    document.getElementById('client-wait-menu').style.display = 'none';
+    document.getElementById('ui-layer').style.display = 'block';
+    if (isTouch) document.getElementById('mobile-controls').style.display = 'block';
+    else document.body.requestPointerLock();
+
+    initEngine();
+
+    const randomSpawn = SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
+    yawObject.position.set(randomSpawn.x, 1.6, randomSpawn.z);
+    
+    isRunning = true;
+    lastTime = performance.now();
+    animate();
+}
+
+function resolveCollision(pos, box, size, velocity) {
+    pos.x += velocity.x;
+    box.setFromCenterAndSize(pos, size);
+    for (let w of walls) {
+        if (box.intersectsBox(w)) { pos.x -= velocity.x; break; }
+    }
+    pos.z += velocity.z;
+    box.setFromCenterAndSize(pos, size);
+    for (let w of walls) {
+        if (box.intersectsBox(w)) { pos.z -= velocity.z; break; }
+    }
+}
+
+function createTracer(start, end, color = 0x38bdf8) {
+    const geom = new THREE.BufferGeometry().setFromPoints([start, end]);
+    const mat = new THREE.LineBasicMaterial({ color: color, linewidth: 3 });
+    const line = new THREE.Line(geom, mat);
+    scene.add(line);
+    setTimeout(() => scene.remove(line), 80);
+}
+
+const keys = { w: false, a: false, s: false, d: false };
+document.addEventListener('keydown', e => { if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; });
+document.addEventListener('keyup', e => { if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
+
+document.addEventListener('mousemove', e => {
+    if (!isRunning || isTouch) return;
+    if (document.pointerLockElement === document.body) {
+        yawObject.rotation.y -= e.movementX * 0.002;
+        pitchObject.rotation.x = Math.max(-1.4, Math.min(1.4, pitchObject.rotation.x - e.movementY * 0.002));
+    }
+});
+
+// قابلیت ایم‌بات (Aimbot) - هدایت خودکار تیرها به سمت حریف
+function fireWeapon() {
+    playSound('shoot');
+    pitchObject.rotation.x += 0.01;
+
+    let hitTargetId = null;
+    let hitDamage = 50; // هدشات قطعی و مرگبار
+    let endPoint = new THREE.Vector3();
+
+    // پیدا کردن نزدیک‌ترین حریف زنده‌
+    let targetPlayer = null;
+    let minDst = Infinity;
+    let myPos = yawObject.position;
+
+    Object.keys(remotePlayers).forEach(id => {
+        const rp = remotePlayers[id];
+        if (rp.group.visible) {
+            let dst = myPos.distanceTo(rp.group.position);
+            if (dst < minDst) {
+                minDst = dst;
+                targetPlayer = rp;
+                hitTargetId = id;
+            }
+        }
+    });
+
+    if (targetPlayer) {
+        // قفل کردن روی سر بازیکن مقابل بدون نیاز به تنظیم دقیق نشانه
+        targetPlayer.head.getWorldPosition(endPoint);
+
+        const crosshair = document.getElementById('crosshair');
+        crosshair.classList.add('hit');
+        setTimeout(() => crosshair.classList.remove('hit'), 150);
+    } else {
+        // اگر کسی اطراف نبود، به روبه‌رو شلیک می‌کند
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+        raycaster.ray.at(100, endPoint);
+        hitDamage = 17;
+    }
+
+    const startPos = new THREE.Vector3();
+    camera.getWorldPosition(startPos);
+
+    Object.values(connections).forEach(conn => {
+        if (conn && conn.open) {
+            conn.send({ type: 'shoot', start: startPos, end: endPoint });
+            if (hitTargetId) {
+                conn.send({ type: 'hit', targetId: hitTargetId, dmg: hitDamage });
+                if (hitDamage >= 50) {
+                    playerScore += 1;
+                    document.getElementById('score-val').innerText = playerScore;
+                }
+            }
+        }
+    });
+}
+document.addEventListener('mousedown', () => { if (isRunning && !isTouch) fireWeapon(); });
+
+let joyId = null, lookId = null, lastX = 0, lastY = 0, moveVec = { x: 0, y: 0 };
+const joyZone = document.getElementById('joystick-zone'), joyKnob = document.getElementById('joystick-knob');
+
+document.addEventListener('touchstart', e => {
+    if (!isRunning) return;
+    for (let t of e.changedTouches) {
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        if (el && el.id === 'fire-btn') fireWeapon();
+        else if (t.clientX < window.innerWidth / 2 && joyId === null) { joyId = t.identifier; updateJoy(t); }
+        else if (t.clientX >= window.innerWidth / 2 && lookId === null && (!el || !el.classList.contains('touch-zone'))) {
+            lookId = t.identifier; lastX = t.clientX; lastY = t.clientY;
+        }
+    }
+}, {passive: false});
+
+document.addEventListener('touchmove', e => {
+    if (!isRunning) return;
+    for (let t of e.changedTouches) {
+        if (t.identifier === joyId) updateJoy(t);
+        else if (t.identifier === lookId) {
+            yawObject.rotation.y -= (t.clientX - lastX) * 0.004;
+            pitchObject.rotation.x = Math.max(-1.4, Math.min(1.4, pitchObject.rotation.x - (t.clientY - lastY) * 0.004));
+            lastX = t.clientX; lastY = t.clientY;
+        }
+    }
+}, {passive: false});
+
+document.addEventListener('touchend', e => {
+    for (let t of e.changedTouches) {
+        if (t.identifier === joyId) { joyId = null; moveVec = {x:0, y:0}; joyKnob.style.transform = `translate(0,0)`; }
+        if (t.identifier === lookId) lookId = null;
+    }
+});
+
+function updateJoy(t) {
+    const rect = joyZone.getBoundingClientRect();
+    let dx = t.clientX - (rect.left + rect.width/2), dy = t.clientY - (rect.top + rect.height/2);
+    const dist = Math.hypot(dx, dy), maxR = 40;
+    if (dist > maxR) { dx = (dx/dist)*maxR; dy = (dy/dist)*maxR; }
+    joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+    moveVec.x = dx / maxR; moveVec.y = dy / maxR;
+}
+
+function updateRemotePlayer(id, pos, rot) {
+    if (!remotePlayers[id]) {
+        const group = new THREE.Group();
+
+        const bodyGeo = new THREE.BoxGeometry(1.2, 1.5, 1.2);
+        const bodyMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 0.75;
+        body.userData = { id: id, isHead: false };
+        group.add(body);
+
+        const headGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+        const headMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24 });
+        const head = new THREE.Mesh(headGeo, headMat);
+        head.position.y = 1.6;
+        head.userData = { id: id, isHead: true };
+        group.add(head);
+
+        scene.add(group);
+        remotePlayers[id] = { group: group, body: body, head: head };
+    }
+    remotePlayers[id].group.position.set(pos.x, pos.y - 0.8, pos.z);
+    remotePlayers[id].group.rotation.y = rot;
+}
+
+function gameOver() {
+    isRunning, isRunning = false;
+    broadcastDeath();
+    document.getElementById('ui-layer').style.display = 'none';
+    document.getElementById('mobile-controls').style.display = 'none';
+    document.getElementById('game-over').style.display = 'flex';
+}
+
+let lastTime = performance.now();
+function animate() {
+    if (!isRunning) return;
+    requestAnimationFrame(animate);
+
+    const now = performance.now();
+    const delta = Math.min((now - lastTime) / 1000, 0.1);
+    lastTime = now;
+
+    let dir = new THREE.Vector3();
+    if (isTouch) { dir.x = moveVec.x; dir.z = moveVec.y; }
+    else {
+        if (keys.w) dir.z -= 1; if (keys.s) dir.z += 1;
+        if (keys.a) dir.x -= 1; if (keys.d) dir.x += 1;
+    }
+    dir.normalize();
+    const mVec = new THREE.Vector3(dir.x, 0, dir.z).applyQuaternion(yawObject.quaternion);
+    
+    resolveCollision(yawObject.position, playerBox, playerSize, new THREE.Vector3(mVec.x * 11.5 * delta, 0, mVec.z * 11.5 * delta));
+
+    Object.values(remotePlayers).forEach(p => {
+        if (p.group.visible) p.group.updateMatrixWorld(true);
+    });
+
+    Object.values(connections).forEach(conn => {
+        if (conn && conn.open && myId) {
+            conn.send({ type: 'pos', id: myId, pos: yawObject.position, rot: yawObject.rotation.y });
+        }
+    });
+
+    renderer.render(scene, camera);
+}
+</script>
+</body>
+</html>
